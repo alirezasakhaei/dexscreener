@@ -25,7 +25,7 @@ class HttpClient:
         if response.status_code >= 400:
             try:
                 error_data = response.json()
-            except:
+            except (ValueError, requests.exceptions.JSONDecodeError):
                 error_data = response.text
             
             raise APIError(
@@ -52,7 +52,7 @@ class HttpClient:
         if response.status >= 400:
             try:
                 error_data = await response.json()
-            except:
+            except (ValueError, aiohttp.ContentTypeError):
                 error_data = await response.text()
             
             raise APIError(
@@ -93,20 +93,13 @@ class HttpClient:
         url = self._create_absolute_url(url)
 
         if 'timeout' not in kwargs:
-            kwargs['timeout'] = self.timeout
+            kwargs['timeout'] = aiohttp.ClientTimeout(total=self.timeout)
 
         async with self._limiter:
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.request(method, url, **kwargs) as response:
-                        
-                        try:
-                            return await self._handle_response_async(response, url)
-                        except aiohttp.ClientError as e:
-                            raise NetworkError(e)
-                        
-                        except asyncio.TimeoutError as e:
-                            raise TimeoutError(f"Request to {url} timed out after {self.timeout}s")
+                        return await self._handle_response_async(response, url)
             
             except aiohttp.ClientError as e:
                 raise NetworkError(e)
